@@ -1,4 +1,14 @@
 import React, { useState, useRef, useEffect } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  Dimensions,
+  Platform,
+} from "react-native";
 
 interface Message {
   id: string;
@@ -13,7 +23,9 @@ interface QuickReply {
   action: string;
 }
 
-const Chatbot: React.FC = () => {
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+
+const BusTicketingChatbot: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
@@ -25,7 +37,9 @@ const Chatbot: React.FC = () => {
 
   const [inputText, setInputText] = useState("");
   const [isTyping, setIsTyping] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
 
   const quickReplies: QuickReply[] = [
     { id: "1", text: "🔍 Search buses", action: "search_buses" },
@@ -37,11 +51,26 @@ const Chatbot: React.FC = () => {
   ];
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 100);
   };
 
   useEffect(() => {
     scrollToBottom();
+    // Animate new message
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+    ]).start();
   }, [messages]);
 
   const generateBotResponse = (userMessage: string): string => {
@@ -133,349 +162,419 @@ const Chatbot: React.FC = () => {
     });
   };
 
+  const TypingIndicator = () => {
+    const dot1 = useRef(new Animated.Value(0.3)).current;
+    const dot2 = useRef(new Animated.Value(0.3)).current;
+    const dot3 = useRef(new Animated.Value(0.3)).current;
+
+    useEffect(() => {
+      const animate = () => {
+        Animated.sequence([
+          Animated.timing(dot1, {
+            toValue: 1,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot1, {
+            toValue: 0.3,
+            duration: 400,
+            useNativeDriver: true,
+          }),
+        ]).start();
+
+        setTimeout(() => {
+          Animated.sequence([
+            Animated.timing(dot2, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot2, {
+              toValue: 0.3,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 200);
+
+        setTimeout(() => {
+          Animated.sequence([
+            Animated.timing(dot3, {
+              toValue: 1,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+            Animated.timing(dot3, {
+              toValue: 0.3,
+              duration: 400,
+              useNativeDriver: true,
+            }),
+          ]).start();
+        }, 400);
+      };
+
+      const interval = setInterval(animate, 1200);
+      return () => clearInterval(interval);
+    }, []);
+
+    return (
+      <View style={styles.typingContainer}>
+        <View style={styles.typingBubble}>
+          <View style={styles.typingDots}>
+            <Animated.View style={[styles.typingDot, { opacity: dot1 }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot2 }]} />
+            <Animated.View style={[styles.typingDot, { opacity: dot3 }]} />
+          </View>
+        </View>
+      </View>
+    );
+  };
+
   const styles = {
     container: {
-      display: "flex",
-      flexDirection: "column" as const,
-      height: "100vh",
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      maxWidth: "400px",
-      margin: "0 auto",
-      fontFamily:
-        '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-      boxShadow: "0 20px 40px rgba(0,0,0,0.1)",
+      flex: 1,
+      backgroundColor: "#667eea",
+      width: screenWidth,
+    },
+    gradientBackground: {
+      flex: 1,
+      backgroundColor: "#667eea",
     },
     header: {
-      background: "linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)",
-      color: "white",
-      padding: "20px",
-      borderRadius: "0 0 25px 25px",
-      boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+      backgroundColor: "#1e3c72",
+      paddingHorizontal: 20,
+      paddingVertical: 15,
+      paddingTop: Platform.OS === "ios" ? 50 : 30,
+      borderBottomLeftRadius: 25,
+      borderBottomRightRadius: 25,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 5,
     },
     headerContent: {
-      display: "flex",
+      flexDirection: "row" as const,
       alignItems: "center",
-      gap: "12px",
     },
     avatar: {
-      width: "45px",
-      height: "45px",
-      background: "rgba(255,255,255,0.2)",
-      borderRadius: "50%",
-      display: "flex",
+      width: 45,
+      height: 45,
+      backgroundColor: "rgba(255,255,255,0.2)",
+      borderRadius: 22.5,
       alignItems: "center",
       justifyContent: "center",
-      fontSize: "20px",
-      backdropFilter: "blur(10px)",
+      marginRight: 12,
     },
-    headerText: {
+    avatarText: {
+      fontSize: 20,
+    },
+    headerTextContainer: {
       flex: 1,
     },
     title: {
-      fontSize: "18px",
-      fontWeight: "700",
-      margin: "0 0 4px 0",
+      fontSize: 18,
+      fontWeight: "700" as const,
+      color: "white",
+      marginBottom: 2,
     },
     status: {
-      fontSize: "13px",
+      fontSize: 13,
       color: "#a8d0f0",
-      margin: 0,
     },
     messagesContainer: {
       flex: 1,
-      overflowY: "auto" as const,
-      padding: "20px",
-      background: "rgba(255,255,255,0.95)",
-      backdropFilter: "blur(10px)",
+      backgroundColor: "rgba(255,255,255,0.95)",
+      paddingHorizontal: 20,
+      paddingVertical: 20,
     },
-    messageWrapper: {
-      display: "flex",
-      marginBottom: "16px",
-      animation: "slideInUp 0.3s ease-out",
+    messageRow: {
+      marginBottom: 16,
+      width: "100%",
     },
-    messageWrapperBot: {
-      justifyContent: "flex-start",
+    messageRowBot: {
+      alignItems: "flex-start" as const,
     },
-    messageWrapperUser: {
-      justifyContent: "flex-end",
+    messageRowUser: {
+      alignItems: "flex-end" as const,
     },
     messageBubble: {
       maxWidth: "80%",
-      padding: "12px 16px",
-      borderRadius: "20px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-      position: "relative" as const,
+      padding: 12,
+      borderRadius: 20,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     },
     messageBubbleBot: {
-      background: "white",
-      color: "#333",
-      borderBottomLeftRadius: "8px",
-      border: "1px solid #e1e5e9",
+      backgroundColor: "white",
+      borderBottomLeftRadius: 8,
+      borderWidth: 1,
+      borderColor: "#e1e5e9",
     },
     messageBubbleUser: {
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      color: "white",
-      borderBottomRightRadius: "8px",
+      backgroundColor: "#667eea",
+      borderBottomRightRadius: 8,
     },
     messageText: {
-      fontSize: "14px",
-      lineHeight: "1.5",
-      whiteSpace: "pre-line" as const,
-      margin: 0,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    messageTextBot: {
+      color: "#333",
+    },
+    messageTextUser: {
+      color: "white",
     },
     timestamp: {
-      fontSize: "11px",
-      marginTop: "6px",
+      fontSize: 11,
+      marginTop: 6,
       opacity: 0.7,
     },
-    typingIndicator: {
-      display: "flex",
-      justifyContent: "flex-start",
-      marginBottom: "16px",
-      animation: "slideInUp 0.3s ease-out",
+    timestampBot: {
+      color: "#666",
+    },
+    timestampUser: {
+      color: "rgba(255,255,255,0.8)",
+    },
+    typingContainer: {
+      alignItems: "flex-start" as const,
+      marginBottom: 16,
     },
     typingBubble: {
-      background: "white",
-      borderRadius: "20px",
-      borderBottomLeftRadius: "8px",
-      padding: "12px 16px",
-      boxShadow: "0 2px 10px rgba(0,0,0,0.1)",
-      border: "1px solid #e1e5e9",
+      backgroundColor: "white",
+      borderRadius: 20,
+      borderBottomLeftRadius: 8,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: "#e1e5e9",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
     },
     typingDots: {
-      display: "flex",
-      gap: "4px",
+      flexDirection: "row" as const,
     },
-    dot: {
-      width: "8px",
-      height: "8px",
-      borderRadius: "50%",
+    typingDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
       backgroundColor: "#999",
-      animation: "bounce 1.4s infinite ease-in-out",
+      marginHorizontal: 2,
     },
     quickRepliesContainer: {
-      padding: "15px 20px",
-      background: "rgba(255,255,255,0.9)",
+      backgroundColor: "rgba(255,255,255,0.9)",
+      paddingHorizontal: 20,
+      paddingVertical: 15,
     },
     quickReplies: {
-      display: "flex",
+      flexDirection: "row" as const,
       flexWrap: "wrap" as const,
-      gap: "8px",
     },
     quickReplyButton: {
-      background: "white",
-      border: "2px solid #e1e5e9",
-      borderRadius: "20px",
-      padding: "8px 14px",
-      fontSize: "13px",
+      backgroundColor: "white",
+      borderWidth: 2,
+      borderColor: "#e1e5e9",
+      borderRadius: 20,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      marginRight: 8,
+      marginBottom: 8,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 4,
+      elevation: 2,
+    },
+    quickReplyText: {
+      fontSize: 13,
       color: "#555",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
     },
     inputArea: {
-      padding: "20px",
-      background: "white",
-      borderRadius: "25px 25px 0 0",
+      backgroundColor: "white",
+      paddingHorizontal: 20,
+      paddingVertical: 20,
+      borderTopLeftRadius: 25,
+      borderTopRightRadius: 25,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 8,
     },
     inputContainer: {
-      display: "flex",
+      flexDirection: "row" as const,
       alignItems: "center",
-      gap: "12px",
-      background: "#f8f9fa",
-      borderRadius: "25px",
-      padding: "4px",
-      border: "2px solid #e1e5e9",
-      transition: "all 0.3s ease",
+      backgroundColor: "#f8f9fa",
+      borderRadius: 25,
+      borderWidth: 2,
+      borderColor: "#e1e5e9",
+      paddingHorizontal: 4,
     },
     input: {
       flex: 1,
-      border: "none",
-      outline: "none",
-      background: "transparent",
-      padding: "12px 16px",
-      fontSize: "14px",
-      borderRadius: "25px",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      fontSize: 14,
+      color: "#333",
     },
     sendButton: {
-      width: "44px",
-      height: "44px",
-      borderRadius: "50%",
-      border: "none",
-      cursor: "pointer",
-      display: "flex",
+      width: 44,
+      height: 44,
+      borderRadius: 22,
       alignItems: "center",
       justifyContent: "center",
-      transition: "all 0.3s ease",
-      fontSize: "18px",
     },
     sendButtonActive: {
-      background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-      color: "white",
-      boxShadow: "0 4px 15px rgba(102, 126, 234, 0.4)",
-      transform: "scale(1)",
+      backgroundColor: "#667eea",
+      shadowColor: "#667eea",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 6,
     },
     sendButtonInactive: {
-      background: "#e1e5e9",
+      backgroundColor: "#e1e5e9",
+    },
+    sendButtonText: {
+      fontSize: 18,
+      fontWeight: "bold" as const,
+    },
+    sendButtonTextActive: {
+      color: "white",
+    },
+    sendButtonTextInactive: {
       color: "#999",
-      cursor: "not-allowed",
     },
   };
 
   return (
-    <div style={styles.container}>
-      <style>
-        {`
-          @keyframes slideInUp {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          
-          @keyframes bounce {
-            0%, 80%, 100% {
-              transform: scale(0);
-            }
-            40% {
-              transform: scale(1);
-            }
-          }
-          
-          .dot:nth-child(1) { animation-delay: -0.32s; }
-          .dot:nth-child(2) { animation-delay: -0.16s; }
-          .dot:nth-child(3) { animation-delay: 0s; }
-          
-          .quick-reply-btn:hover {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-            color: white !important;
-            border-color: transparent !important;
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3) !important;
-          }
-          
-          .input-focused {
-            border-color: #667eea !important;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
-          }
-          
-          .send-btn:hover {
-            transform: scale(1.05) !important;
-          }
-          
-          .send-btn:active {
-            transform: scale(0.95) !important;
-          }
-        `}
-      </style>
-
+    <View style={styles.container}>
       {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.headerContent}>
-          <div style={styles.avatar}>🚌</div>
-          <div style={styles.headerText}>
-            <h1 style={styles.title}>BusBot Assistant</h1>
-            <p style={styles.status}>● Online • Ready to help</p>
-          </div>
-        </div>
-      </div>
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>🚌</Text>
+          </View>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>BusBot Assistant</Text>
+            <Text style={styles.status}>● Online • Ready to help</Text>
+          </View>
+        </View>
+      </View>
 
       {/* Messages */}
-      <div style={styles.messagesContainer}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.messagesContainer}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 20 }}
+      >
         {messages.map((message) => (
-          <div
+          <Animated.View
             key={message.id}
-            style={{
-              ...styles.messageWrapper,
-              ...(message.isBot
-                ? styles.messageWrapperBot
-                : styles.messageWrapperUser),
-            }}
+            style={[
+              styles.messageRow,
+              message.isBot ? styles.messageRowBot : styles.messageRowUser,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }],
+              },
+            ]}
           >
-            <div
-              style={{
-                ...styles.messageBubble,
-                ...(message.isBot
+            <View
+              style={[
+                styles.messageBubble,
+                message.isBot
                   ? styles.messageBubbleBot
-                  : styles.messageBubbleUser),
-              }}
+                  : styles.messageBubbleUser,
+              ]}
             >
-              <p style={styles.messageText}>{message.text}</p>
-              <div style={styles.timestamp}>
+              <Text
+                style={[
+                  styles.messageText,
+                  message.isBot
+                    ? styles.messageTextBot
+                    : styles.messageTextUser,
+                ]}
+              >
+                {message.text}
+              </Text>
+              <Text
+                style={[
+                  styles.timestamp,
+                  message.isBot ? styles.timestampBot : styles.timestampUser,
+                ]}
+              >
                 {formatTime(message.timestamp)}
-              </div>
-            </div>
-          </div>
+              </Text>
+            </View>
+          </Animated.View>
         ))}
 
         {/* Typing Indicator */}
-        {isTyping && (
-          <div style={styles.typingIndicator}>
-            <div style={styles.typingBubble}>
-              <div style={styles.typingDots}>
-                <div style={styles.dot} className="dot"></div>
-                <div style={styles.dot} className="dot"></div>
-                <div style={styles.dot} className="dot"></div>
-              </div>
-            </div>
-          </div>
-        )}
-        <div ref={messagesEndRef} />
-      </div>
+        {isTyping && <TypingIndicator />}
+      </ScrollView>
 
       {/* Quick Replies */}
-      <div style={styles.quickRepliesContainer}>
-        <div style={styles.quickReplies}>
+      <View style={styles.quickRepliesContainer}>
+        <View style={styles.quickReplies}>
           {quickReplies.map((reply) => (
-            <button
+            <TouchableOpacity
               key={reply.id}
-              onClick={() => handleQuickReply(reply)}
+              onPress={() => handleQuickReply(reply)}
               style={styles.quickReplyButton}
-              className="quick-reply-btn"
+              activeOpacity={0.7}
             >
-              {reply.text}
-            </button>
+              <Text style={styles.quickReplyText}>{reply.text}</Text>
+            </TouchableOpacity>
           ))}
-        </div>
-      </div>
+        </View>
+      </View>
 
       {/* Input Area */}
-      <div style={styles.inputArea}>
-        <div
-          style={styles.inputContainer}
-          className={inputText ? "input-focused" : ""}
-        >
-          <input
-            type="text"
+      <View style={styles.inputArea}>
+        <View style={styles.inputContainer}>
+          <TextInput
             value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onKeyPress={(e) =>
-              e.key === "Enter" && handleSendMessage(inputText)
-            }
+            onChangeText={setInputText}
+            onSubmitEditing={() => handleSendMessage(inputText)}
             placeholder="Type your message..."
+            placeholderTextColor="#999"
             style={styles.input}
+            multiline={false}
+            returnKeyType="send"
           />
-          <button
-            onClick={() => handleSendMessage(inputText)}
+          <TouchableOpacity
+            onPress={() => handleSendMessage(inputText)}
             disabled={!inputText.trim()}
-            style={{
-              ...styles.sendButton,
-              ...(inputText.trim()
+            style={[
+              styles.sendButton,
+              inputText.trim()
                 ? styles.sendButtonActive
-                : styles.sendButtonInactive),
-            }}
-            className="send-btn"
+                : styles.sendButtonInactive,
+            ]}
+            activeOpacity={0.8}
           >
-            ➤
-          </button>
-        </div>
-      </div>
-    </div>
+            <Text
+              style={[
+                styles.sendButtonText,
+                inputText.trim()
+                  ? styles.sendButtonTextActive
+                  : styles.sendButtonTextInactive,
+              ]}
+            >
+              ➤
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 };
 
-export default Chatbot;
+export default BusTicketingChatbot;

@@ -1,720 +1,934 @@
-import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from "react";
 import {
-    Alert,
-    FlatList,
-    Modal,
-    Platform,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
-} from 'react-native';
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Animated,
+  Dimensions,
+  Platform,
+  Modal,
+} from "react-native";
 
-const Home = () => {
-  const [tripType, setTripType] = useState('one-way');
-  const [passengers, setPassengers] = useState(2);
-  const [fromLocation, setFromLocation] = useState('');
-  const [toLocation, setToLocation] = useState('');
-  const [departureDate, setDepartureDate] = useState(new Date());
-  const [returnDate, setReturnDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [datePickerType, setDatePickerType] = useState('departure');
-  const [showLocationModal, setShowLocationModal] = useState(false);
-  const [locationSelectType, setLocationSelectType] = useState('from');
-  const [showPassengerModal, setShowPassengerModal] = useState(false);
-  const [showReturnDate, setShowReturnDate] = useState(false);
+interface BusStop {
+  id: string;
+  name: string;
+  distance: string;
+  routes: string[];
+  nextBus: string;
+  fare: number;
+}
 
-  // Sample locations data
-  const locations = [
-    { id: 1, city: 'Manchester', country: 'United Kingdom', code: 'MAN' },
-    { id: 2, city: 'London', country: 'United Kingdom', code: 'LON' },
-    { id: 3, city: 'Paris', country: 'France', code: 'PAR' },
-    { id: 4, city: 'Berlin', country: 'Germany', code: 'BER' },
-    { id: 5, city: 'Amsterdam', country: 'Netherlands', code: 'AMS' },
-    { id: 6, city: 'Brussels', country: 'Belgium', code: 'BRU' },
-    { id: 7, city: 'Barcelona', country: 'Spain', code: 'BCN' },
-    { id: 8, city: 'Milan', country: 'Italy', code: 'MIL' },
-    { id: 9, city: 'Prague', country: 'Czech Republic', code: 'PRG' },
-    { id: 10, city: 'Vienna', country: 'Austria', code: 'VIE' },
+interface BusRoute {
+  id: string;
+  routeName: string;
+  from: string;
+  to: string;
+  nextDeparture: string;
+  duration: string;
+  fare: number;
+  busType: string;
+  available: boolean;
+}
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get("window");
+const isWeb = Platform.OS === "web";
+
+const Home: React.FC = () => {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<"stops" | "routes">(
+    "stops",
+  );
+  const [showRouteModal, setShowRouteModal] = useState(false);
+  const [selectedRoute, setSelectedRoute] = useState<BusRoute | null>(null);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+
+  // Dummy data for Punjab bus stops
+  const nearbyStops: BusStop[] = [
+    {
+      id: "1",
+      name: "Chandigarh Bus Stand",
+      distance: "0.2 km",
+      routes: ["Route 1", "Route 5", "Route 12"],
+      nextBus: "5 min",
+      fare: 15,
+    },
+    {
+      id: "2",
+      name: "Sector 17 Plaza",
+      distance: "0.8 km",
+      routes: ["Route 3", "Route 7"],
+      nextBus: "12 min",
+      fare: 20,
+    },
+    {
+      id: "3",
+      name: "PGI Hospital",
+      distance: "1.2 km",
+      routes: ["Route 2", "Route 8", "Route 15"],
+      nextBus: "8 min",
+      fare: 25,
+    },
+    {
+      id: "4",
+      name: "Panjab University",
+      distance: "2.1 km",
+      routes: ["Route 4", "Route 11"],
+      nextBus: "15 min",
+      fare: 30,
+    },
+    {
+      id: "5",
+      name: "IT Park Mohali",
+      distance: "3.5 km",
+      routes: ["Route 6", "Route 9"],
+      nextBus: "20 min",
+      fare: 35,
+    },
   ];
 
-  const ProfileImage = () => (
-    <View style={styles.profileImageContainer}>
-      <View style={styles.profileImage}>
-        <Text style={styles.profileInitial}>A</Text>
+  const busRoutes: BusRoute[] = [
+    {
+      id: "1",
+      routeName: "Chandigarh - Amritsar Express",
+      from: "Chandigarh",
+      to: "Amritsar",
+      nextDeparture: "08:30 AM",
+      duration: "4h 30m",
+      fare: 450,
+      busType: "AC Sleeper",
+      available: true,
+    },
+    {
+      id: "2",
+      routeName: "Ludhiana - Jalandhar Local",
+      from: "Ludhiana",
+      to: "Jalandhar",
+      nextDeparture: "09:15 AM",
+      duration: "1h 45m",
+      fare: 120,
+      busType: "Non-AC",
+      available: true,
+    },
+    {
+      id: "3",
+      routeName: "Patiala - Mohali Metro",
+      from: "Patiala",
+      to: "Mohali",
+      nextDeparture: "10:00 AM",
+      duration: "2h 15m",
+      fare: 180,
+      busType: "AC Bus",
+      available: false,
+    },
+    {
+      id: "4",
+      routeName: "Bathinda - Moga Direct",
+      from: "Bathinda",
+      to: "Moga",
+      nextDeparture: "11:30 AM",
+      duration: "2h 30m",
+      fare: 200,
+      busType: "Deluxe",
+      available: true,
+    },
+  ];
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  const getResponsiveWidth = () => {
+    if (isWeb) {
+      return Math.min(screenWidth, 600);
+    }
+    return screenWidth;
+  };
+
+  const getContentPadding = () => {
+    if (isWeb && screenWidth > 600) {
+      return (screenWidth - 600) / 2;
+    }
+    return 0;
+  };
+
+  const MapView: React.FC = () => {
+    return (
+      <View style={styles.mapContainer}>
+        {/* Simulated Map Background */}
+        <View style={styles.mapBackground}>
+          {/* Map Elements */}
+          <View style={[styles.mapElement, { top: "20%", left: "15%" }]}>
+            <View style={styles.parkIcon}>
+              <Text style={styles.parkIconText}>🌳</Text>
+            </View>
+            <Text style={styles.mapLabel}>Rock Garden</Text>
+          </View>
+
+          <View style={[styles.mapElement, { top: "40%", left: "70%" }]}>
+            <View style={styles.mallIcon}>
+              <Text style={styles.mallIconText}>🏬</Text>
+            </View>
+            <Text style={styles.mapLabel}>Elante Mall</Text>
+          </View>
+
+          {/* Roads */}
+          <View style={[styles.road, styles.roadHorizontal1]} />
+          <View style={[styles.road, styles.roadHorizontal2]} />
+          <View style={[styles.road, styles.roadVertical1]} />
+          <View style={[styles.road, styles.roadVertical2]} />
+
+          {/* Bus Stops */}
+          <TouchableOpacity
+            style={[styles.busStop, { top: "35%", left: "25%" }]}
+          >
+            <View style={styles.busStopIcon} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.busStop, { top: "60%", left: "50%" }]}
+          >
+            <View style={styles.busStopIcon} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.busStop, { top: "25%", left: "80%" }]}
+          >
+            <View style={styles.busStopIcon} />
+          </TouchableOpacity>
+
+          {/* Current Location */}
+          <View style={styles.currentLocation}>
+            <View style={styles.currentLocationDot} />
+            <View style={styles.currentLocationRing} />
+          </View>
+        </View>
+
+        {/* Map Controls */}
+        <TouchableOpacity style={styles.locationButton}>
+          <Text style={styles.locationButtonText}>📍</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.zoomButton}>
+          <Text style={styles.zoomButtonText}>🔍</Text>
+        </TouchableOpacity>
       </View>
-    </View>
-  );
-
-  const handleLocationSelect = (location) => {
-    const locationText = `${location.city}, ${location.country}`;
-    if (locationSelectType === 'from') {
-      setFromLocation(locationText);
-    } else {
-      setToLocation(locationText);
-    }
-    setShowLocationModal(false);
-  };
-
-  const handleSwapLocations = () => {
-    const temp = fromLocation;
-    setFromLocation(toLocation);
-    setToLocation(temp);
-  };
-
-  const handleDateChange = (event, selectedDate) => {
-    const currentDate = selectedDate || (datePickerType === 'departure' ? departureDate : returnDate);
-    setShowDatePicker(Platform.OS === 'ios');
-    
-    if (datePickerType === 'departure') {
-      setDepartureDate(currentDate);
-    } else {
-      setReturnDate(currentDate);
-    }
-  };
-
-  const openDatePicker = (type) => {
-    setDatePickerType(type);
-    setShowDatePicker(true);
-  };
-
-  const formatDate = (date) => {
-    const options = { weekday: 'short', month: 'short', day: 'numeric' };
-    return date.toLocaleDateString('en-US', options);
-  };
-
-  const handleSearch = () => {
-    if (!fromLocation || !toLocation) {
-      Alert.alert('Missing Information', 'Please select both departure and destination locations.');
-      return;
-    }
-
-    if (fromLocation === toLocation) {
-      Alert.alert('Invalid Route', 'Departure and destination cannot be the same.');
-      return;
-    }
-
-    if (tripType === 'round-trip' && !showReturnDate) {
-      Alert.alert('Missing Return Date', 'Please select a return date for round trip.');
-      return;
-    }
-
-    // Here you would typically navigate to search results or make an API call
-    Alert.alert(
-      'Search Started',
-      `Searching for ${tripType} tickets from ${fromLocation} to ${toLocation} for ${passengers} passenger${passengers > 1 ? 's' : ''}.`
     );
   };
 
-  const renderLocationItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.locationItem}
-      onPress={() => handleLocationSelect(item)}
-    >
-      <View style={styles.locationItemLeft}>
-        <View style={styles.locationCode}>
-          <Text style={styles.locationCodeText}>{item.code}</Text>
+  const BusStopCard: React.FC<{ stop: BusStop; index: number }> = ({
+    stop,
+    index,
+  }) => {
+    const cardAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.timing(cardAnim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 100,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    return (
+      <Animated.View
+        style={[
+          styles.stopCard,
+          {
+            opacity: cardAnim,
+            transform: [
+              {
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.stopHeader}>
+          <View style={styles.stopInfo}>
+            <Text style={styles.stopName}>{stop.name}</Text>
+            <Text style={styles.stopDistance}>📍 {stop.distance} away</Text>
+          </View>
+          <View style={styles.nextBusContainer}>
+            <Text style={styles.nextBusLabel}>Next Bus</Text>
+            <Text style={styles.nextBusTime}>{stop.nextBus}</Text>
+          </View>
         </View>
-        <View>
-          <Text style={styles.locationCity}>{item.city}</Text>
-          <Text style={styles.locationCountry}>{item.country}</Text>
+
+        <View style={styles.routesContainer}>
+          <Text style={styles.routesLabel}>Available Routes:</Text>
+          <View style={styles.routesList}>
+            {stop.routes.map((route, idx) => (
+              <View key={idx} style={styles.routeTag}>
+                <Text style={styles.routeTagText}>{route}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color="#666" />
-    </TouchableOpacity>
-  );
+
+        <View style={styles.fareContainer}>
+          <Text style={styles.fareLabel}>Starting from</Text>
+          <Text style={styles.fareAmount}>₹{stop.fare}</Text>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const RouteCard: React.FC<{ route: BusRoute; index: number }> = ({
+    route,
+    index,
+  }) => {
+    const cardAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+      Animated.timing(cardAnim, {
+        toValue: 1,
+        duration: 300,
+        delay: index * 100,
+        useNativeDriver: true,
+      }).start();
+    }, []);
+
+    return (
+      <Animated.View
+        style={[
+          styles.routeCard,
+          {
+            opacity: cardAnim,
+            transform: [
+              {
+                translateY: cardAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [30, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <View style={styles.routeHeader}>
+          <Text style={styles.routeName}>{route.routeName}</Text>
+          <View
+            style={[
+              styles.availabilityBadge,
+              { backgroundColor: route.available ? "#059669" : "#DC2626" },
+            ]}
+          >
+            <Text style={styles.availabilityText}>
+              {route.available ? "Available" : "Full"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.routeDetails}>
+          <View style={styles.routePath}>
+            <Text style={styles.cityText}>{route.from}</Text>
+            <View style={styles.routeLineContainer}>
+              <View style={styles.routeLine} />
+              <Text style={styles.busIcon}>🚌</Text>
+              <View style={styles.routeLine} />
+            </View>
+            <Text style={styles.cityText}>{route.to}</Text>
+          </View>
+
+          <View style={styles.routeInfo}>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Departure</Text>
+              <Text style={styles.infoValue}>{route.nextDeparture}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Duration</Text>
+              <Text style={styles.infoValue}>{route.duration}</Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text style={styles.infoLabel}>Bus Type</Text>
+              <Text style={styles.infoValue}>{route.busType}</Text>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.routeFooter}>
+          <Text style={styles.routeFare}>₹{route.fare}</Text>
+          <TouchableOpacity
+            style={[
+              styles.bookButton,
+              { backgroundColor: route.available ? "#1E293B" : "#9CA3AF" },
+            ]}
+            disabled={!route.available}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.bookButtonText}>
+              {route.available ? "Book Now" : "Fully Booked"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  };
+
+  const styles = {
+    container: {
+      flex: 1,
+      backgroundColor: "#F8FAFC",
+      width: getResponsiveWidth(),
+      alignSelf: "center" as const,
+      marginHorizontal: getContentPadding(),
+    },
+    header: {
+      backgroundColor: "#1E293B",
+      paddingTop: Platform.OS === "ios" ? 50 : 30,
+      paddingBottom: 20,
+      paddingHorizontal: 20,
+    },
+    searchContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      backgroundColor: "rgba(255,255,255,0.15)",
+      borderRadius: 25,
+      paddingHorizontal: 16,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+    },
+    searchIcon: {
+      fontSize: 18,
+      color: "rgba(255,255,255,0.8)",
+      marginRight: 12,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 16,
+      color: "white",
+      paddingVertical: 12,
+    },
+    notificationButton: {
+      position: "absolute" as const,
+      right: 20,
+      top: Platform.OS === "ios" ? 50 : 30,
+      backgroundColor: "rgba(255,255,255,0.15)",
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.2)",
+    },
+    notificationIcon: {
+      fontSize: 20,
+      color: "white",
+    },
+    mapContainer: {
+      height: screenHeight * 0.45,
+      backgroundColor: "#E5E7EB",
+      position: "relative" as const,
+    },
+    mapBackground: {
+      flex: 1,
+      backgroundColor: "#F3F4F6",
+      position: "relative" as const,
+    },
+    road: {
+      position: "absolute" as const,
+      backgroundColor: "#D1D5DB",
+    },
+    roadHorizontal1: {
+      height: 4,
+      width: "100%",
+      top: "30%",
+    },
+    roadHorizontal2: {
+      height: 4,
+      width: "100%",
+      top: "65%",
+    },
+    roadVertical1: {
+      width: 4,
+      height: "100%",
+      left: "30%",
+    },
+    roadVertical2: {
+      width: 4,
+      height: "100%",
+      left: "75%",
+    },
+    mapElement: {
+      position: "absolute" as const,
+      alignItems: "center",
+    },
+    parkIcon: {
+      backgroundColor: "#059669",
+      borderRadius: 15,
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    parkIconText: {
+      fontSize: 16,
+    },
+    mallIcon: {
+      backgroundColor: "#DC2626",
+      borderRadius: 15,
+      width: 30,
+      height: 30,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    mallIconText: {
+      fontSize: 16,
+    },
+    mapLabel: {
+      fontSize: 10,
+      fontWeight: "600" as const,
+      color: "#374151",
+      marginTop: 4,
+      backgroundColor: "white",
+      paddingHorizontal: 4,
+      paddingVertical: 2,
+      borderRadius: 4,
+    },
+    busStop: {
+      position: "absolute" as const,
+    },
+    busStopIcon: {
+      width: 12,
+      height: 12,
+      backgroundColor: "#1E293B",
+      borderRadius: 6,
+      borderWidth: 3,
+      borderColor: "white",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    currentLocation: {
+      position: "absolute" as const,
+      top: "50%",
+      left: "45%",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    currentLocationDot: {
+      width: 12,
+      height: 12,
+      backgroundColor: "#3B82F6",
+      borderRadius: 6,
+      borderWidth: 3,
+      borderColor: "white",
+      zIndex: 2,
+    },
+    currentLocationRing: {
+      position: "absolute" as const,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: "rgba(59, 130, 246, 0.2)",
+      borderWidth: 2,
+      borderColor: "#3B82F6",
+    },
+    locationButton: {
+      position: "absolute" as const,
+      bottom: 80,
+      right: 20,
+      backgroundColor: "white",
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    locationButtonText: {
+      fontSize: 20,
+    },
+    zoomButton: {
+      position: "absolute" as const,
+      bottom: 20,
+      right: 20,
+      backgroundColor: "white",
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.15,
+      shadowRadius: 8,
+      elevation: 6,
+    },
+    zoomButtonText: {
+      fontSize: 18,
+    },
+    bottomSheet: {
+      backgroundColor: "white",
+      borderTopLeftRadius: 25,
+      borderTopRightRadius: 25,
+      flex: 1,
+      paddingTop: 10,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: -4 },
+      shadowOpacity: 0.1,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    bottomSheetHandle: {
+      width: 40,
+      height: 4,
+      backgroundColor: "#D1D5DB",
+      borderRadius: 2,
+      alignSelf: "center" as const,
+      marginBottom: 20,
+    },
+    categoryTabs: {
+      flexDirection: "row" as const,
+      backgroundColor: "#F1F5F9",
+      marginHorizontal: 20,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 20,
+    },
+    categoryTab: {
+      flex: 1,
+      paddingVertical: 12,
+      alignItems: "center",
+      borderRadius: 8,
+    },
+    activeCategoryTab: {
+      backgroundColor: "#1E293B",
+      shadowColor: "#1E293B",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    categoryTabText: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: "#64748B",
+    },
+    activeCategoryTabText: {
+      color: "white",
+    },
+    sectionTitle: {
+      fontSize: 20,
+      fontWeight: "700" as const,
+      color: "#1F2937",
+      paddingHorizontal: 20,
+      marginBottom: 16,
+    },
+    contentContainer: {
+      paddingHorizontal: 20,
+    },
+    stopCard: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      marginBottom: 16,
+      padding: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 6,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+    stopHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 12,
+    },
+    stopInfo: {
+      flex: 1,
+    },
+    stopName: {
+      fontSize: 16,
+      fontWeight: "700" as const,
+      color: "#1F2937",
+      marginBottom: 4,
+    },
+    stopDistance: {
+      fontSize: 14,
+      color: "#64748B",
+    },
+    nextBusContainer: {
+      alignItems: "flex-end",
+    },
+    nextBusLabel: {
+      fontSize: 12,
+      color: "#64748B",
+      marginBottom: 2,
+    },
+    nextBusTime: {
+      fontSize: 16,
+      fontWeight: "700" as const,
+      color: "#059669",
+    },
+    routesContainer: {
+      marginBottom: 12,
+    },
+    routesLabel: {
+      fontSize: 14,
+      color: "#64748B",
+      marginBottom: 8,
+    },
+    routesList: {
+      flexDirection: "row" as const,
+      flexWrap: "wrap" as const,
+    },
+    routeTag: {
+      backgroundColor: "#F1F5F9",
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      marginRight: 8,
+      marginBottom: 4,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+    routeTagText: {
+      fontSize: 12,
+      color: "#475569",
+      fontWeight: "600" as const,
+    },
+    fareContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      justifyContent: "space-between",
+    },
+    fareLabel: {
+      fontSize: 14,
+      color: "#64748B",
+    },
+    fareAmount: {
+      fontSize: 18,
+      fontWeight: "700" as const,
+      color: "#1E293B",
+    },
+    routeCard: {
+      backgroundColor: "white",
+      borderRadius: 16,
+      marginBottom: 16,
+      padding: 16,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      elevation: 6,
+      borderWidth: 1,
+      borderColor: "#E2E8F0",
+    },
+    routeHeader: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      marginBottom: 16,
+    },
+    routeName: {
+      fontSize: 16,
+      fontWeight: "700" as const,
+      color: "#1F2937",
+      flex: 1,
+      marginRight: 12,
+    },
+    availabilityBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+    },
+    availabilityText: {
+      fontSize: 12,
+      fontWeight: "700" as const,
+      color: "white",
+    },
+    routeDetails: {
+      marginBottom: 16,
+    },
+    routePath: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    cityText: {
+      fontSize: 16,
+      fontWeight: "600" as const,
+      color: "#1F2937",
+      flex: 1,
+      textAlign: "center" as const,
+    },
+    routeLineContainer: {
+      flexDirection: "row" as const,
+      alignItems: "center",
+      marginHorizontal: 16,
+    },
+    routeLine: {
+      height: 2,
+      backgroundColor: "#1E293B",
+      width: 30,
+    },
+    busIcon: {
+      fontSize: 16,
+      marginHorizontal: 8,
+    },
+    routeInfo: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between",
+    },
+    infoItem: {
+      alignItems: "center",
+    },
+    infoLabel: {
+      fontSize: 12,
+      color: "#64748B",
+      marginBottom: 4,
+    },
+    infoValue: {
+      fontSize: 14,
+      fontWeight: "600" as const,
+      color: "#1F2937",
+    },
+    routeFooter: {
+      flexDirection: "row" as const,
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    routeFare: {
+      fontSize: 24,
+      fontWeight: "700" as const,
+      color: "#059669",
+    },
+    bookButton: {
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 12,
+    },
+    bookButtonText: {
+      color: "white",
+      fontSize: 14,
+      fontWeight: "700" as const,
+    },
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerLeft}>
-            <View style={styles.logo}>
-              {/* <Text style={styles.logoIcon}>🚌</Text> */}
-              <Text style={styles.logoText}>Smart Yatra</Text>
-            </View>
-            <Text style={styles.subtitle}>Find cheap bus tickets</Text>
-          </View>
-          <ProfileImage />
+    <View style={styles.container}>
+      {/* Header with Search */}
+      <View style={styles.header}>
+        <View style={styles.searchContainer}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Enter Bus Route"
+            placeholderTextColor="rgba(255,255,255,0.6)"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
+        <TouchableOpacity style={styles.notificationButton}>
+          <Text style={styles.notificationIcon}>🔔</Text>
+        </TouchableOpacity>
+      </View>
 
-        {/* Search Form */}
-        <View style={styles.searchForm}>
-          {/* Trip Type Selector */}
-          <View style={styles.tripTypeContainer}>
-            <TouchableOpacity
-              style={[styles.tripTypeButton, tripType === 'one-way' && styles.tripTypeActive]}
-              onPress={() => {
-                setTripType('one-way');
-                setShowReturnDate(false);
-              }}
-            >
-              <Text style={[styles.tripTypeText, tripType === 'one-way' && styles.tripTypeTextActive]}>
-                One-way
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tripTypeButton, tripType === 'round-trip' && styles.tripTypeActive]}
-              onPress={() => {
-                setTripType('round-trip');
-                setShowReturnDate(true);
-              }}
-            >
-              <Text style={[styles.tripTypeText, tripType === 'round-trip' && styles.tripTypeTextActive]}>
-                Round trip
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.passengersContainer}
-              onPress={() => setShowPassengerModal(true)}
-            >
-              <Ionicons name="person-outline" size={16} color="#666" />
-              <Text style={styles.passengersText}>{passengers}</Text>
-            </TouchableOpacity>
-          </View>
+      {/* Map Section */}
+      <MapView />
 
-          {/* Location Inputs */}
-          <View style={styles.locationContainer}>
-            <TouchableOpacity 
-              style={styles.locationInput}
-              onPress={() => {
-                setLocationSelectType('from');
-                setShowLocationModal(true);
-              }}
-            >
-              <Ionicons name="location-outline" size={20} color="#666" />
-              <Text style={[styles.locationText, !fromLocation && styles.placeholderText]}>
-                {fromLocation || 'From where?'}
-              </Text>
-              <TouchableOpacity 
-                style={styles.swapButton}
-                onPress={handleSwapLocations}
-              >
-                <Ionicons name="swap-vertical" size={20} color="#00D4AA" />
-              </TouchableOpacity>
-            </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={styles.locationInput}
-              onPress={() => {
-                setLocationSelectType('to');
-                setShowLocationModal(true);
-              }}
-            >
-              <Ionicons name="location-outline" size={20} color="#666" />
-              <Text style={[styles.locationText, !toLocation && styles.placeholderText]}>
-                {toLocation || 'To where?'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+      {/* Bottom Sheet */}
+      <Animated.View
+        style={[
+          styles.bottomSheet,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
+      >
+        <View style={styles.bottomSheetHandle} />
 
-          {/* Date Input */}
-          <View style={styles.dateContainer}>
-            <TouchableOpacity 
-              style={styles.dateInput}
-              onPress={() => openDatePicker('departure')}
+        {/* Category Tabs */}
+        <View style={styles.categoryTabs}>
+          <TouchableOpacity
+            style={[
+              styles.categoryTab,
+              selectedCategory === "stops" && styles.activeCategoryTab,
+            ]}
+            onPress={() => setSelectedCategory("stops")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.categoryTabText,
+                selectedCategory === "stops" && styles.activeCategoryTabText,
+              ]}
             >
-              <Ionicons name="calendar-outline" size={20} color="#666" />
-              <Text style={styles.dateText}>{formatDate(departureDate)}</Text>
-            </TouchableOpacity>
-            
-            {tripType === 'round-trip' ? (
-              <TouchableOpacity 
-                style={styles.dateInput}
-                onPress={() => openDatePicker('return')}
-              >
-                <Ionicons name="calendar-outline" size={20} color="#666" />
-                <Text style={styles.dateText}>{formatDate(returnDate)}</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity 
-                style={styles.addReturnButton}
-                onPress={() => {
-                  setTripType('round-trip');
-                  setShowReturnDate(true);
-                }}
-              >
-                <Ionicons name="add" size={16} color="#666" />
-                <Text style={styles.addReturnText}>Add return</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Search Button */}
-          <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
-            <Text style={styles.searchButtonText}>Search</Text>
+              Nearby Stops
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.categoryTab,
+              selectedCategory === "routes" && styles.activeCategoryTab,
+            ]}
+            onPress={() => setSelectedCategory("routes")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.categoryTabText,
+                selectedCategory === "routes" && styles.activeCategoryTabText,
+              ]}
+            >
+              Available Routes
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Cheap Tickets Section */}
-        {fromLocation && toLocation && (
-          <View style={styles.cheapTicketsSection}>
-            <Text style={styles.sectionTitle}>Cheap bus tickets</Text>
-            <Text style={styles.sectionSubtitle}>from {fromLocation.split(',')[0]} to {toLocation.split(',')[0]}</Text>
+        <Text style={styles.sectionTitle}>
+          {selectedCategory === "stops" ? "Nearby Stops" : "Available Routes"}
+        </Text>
 
-            <View style={styles.priceCards}>
-              <View style={styles.priceCard}>
-                <Text style={styles.priceLabel}>Cheapest</Text>
-                <Text style={styles.price}>£{Math.floor(Math.random() * 50) + 80}</Text>
-                <TouchableOpacity style={styles.findTicketButton}>
-                  <Text style={styles.findTicketText}>Find ticket</Text>
-                </TouchableOpacity>
-              </View>
-              
-              <View style={styles.priceCard}>
-                <Text style={styles.priceLabel}>Average</Text>
-                <Text style={styles.price}>£{Math.floor(Math.random() * 50) + 120}</Text>
-                <View style={styles.tipContainer}>
-                  <Ionicons name="bulb-outline" size={16} color="#666" />
-                  <Text style={styles.tipText}>Find a cheap fare by booking as far in advance</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        )}
+        {/* Content */}
+        <ScrollView
+          style={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+        >
+          {selectedCategory === "stops" &&
+            nearbyStops.map((stop, index) => (
+              <BusStopCard key={stop.id} stop={stop} index={index} />
+            ))}
 
-        {/* Bus Times Section */}
-        {fromLocation && toLocation && (
-          <View style={styles.busTimesSection}>
-            <Text style={styles.sectionTitle}>Bus times</Text>
-            <Text style={styles.sectionSubtitle}>from {fromLocation.split(',')[0]} to {toLocation.split(',')[0]}</Text>
-          </View>
-        )}
-      </ScrollView>
-
-      {/* Location Selection Modal */}
-      <Modal
-        visible={showLocationModal}
-        animationType="slide"
-        presentationStyle="pageSheet"
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>
-              {locationSelectType === 'from' ? 'Select departure' : 'Select destination'}
-            </Text>
-            <TouchableOpacity onPress={() => setShowLocationModal(false)}>
-              <Ionicons name="close" size={24} color="#1B1B3A" />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={locations}
-            renderItem={renderLocationItem}
-            keyExtractor={(item) => item.id.toString()}
-            style={styles.locationList}
-          />
-        </SafeAreaView>
-      </Modal>
-
-      {/* Passenger Selection Modal */}
-      <Modal
-        visible={showPassengerModal}
-        animationType="fade"
-        transparent={true}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.passengerModal}>
-            <Text style={styles.passengerModalTitle}>Number of passengers</Text>
-            <View style={styles.passengerControls}>
-              <TouchableOpacity
-                style={[styles.passengerButton, passengers <= 1 && styles.passengerButtonDisabled]}
-                onPress={() => passengers > 1 && setPassengers(passengers - 1)}
-                disabled={passengers <= 1}
-              >
-                <Ionicons name="remove" size={20} color={passengers <= 1 ? "#ccc" : "#1B1B3A"} />
-              </TouchableOpacity>
-              <Text style={styles.passengerCount}>{passengers}</Text>
-              <TouchableOpacity
-                style={[styles.passengerButton, passengers >= 9 && styles.passengerButtonDisabled]}
-                onPress={() => passengers < 9 && setPassengers(passengers + 1)}
-                disabled={passengers >= 9}
-              >
-                <Ionicons name="add" size={20} color={passengers >= 9 ? "#ccc" : "#1B1B3A"} />
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity
-              style={styles.passengerDoneButton}
-              onPress={() => setShowPassengerModal(false)}
-            >
-              <Text style={styles.passengerDoneText}>Done</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Date Picker */}
-      {showDatePicker && (
-        <DateTimePicker
-          testID="dateTimePicker"
-          value={datePickerType === 'departure' ? departureDate : returnDate}
-          mode="date"
-          is24Hour={true}
-          display="default"
-          onChange={handleDateChange}
-          minimumDate={new Date()}
-        />
-      )}
-    </SafeAreaView>
+          {selectedCategory === "routes" &&
+            busRoutes.map((route, index) => (
+              <RouteCard key={route.id} route={route} index={index} />
+            ))}
+        </ScrollView>
+      </Animated.View>
+    </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F5F7',
-  },
-  scrollContainer: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  logo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  logoIcon: {
-    fontSize: 24,
-    marginRight: 8,
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-  },
-  profileImageContainer: {
-    marginLeft: 15,
-  },
-  profileImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#E0E0E0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  profileInitial: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  searchForm: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 30,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  tripTypeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  tripTypeButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 0,
-    marginRight: 20,
-  },
-  tripTypeActive: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#1B1B3A',
-  },
-  tripTypeText: {
-    fontSize: 16,
-    color: '#666',
-  },
-  tripTypeTextActive: {
-    color: '#1B1B3A',
-    fontWeight: '500',
-  },
-  passengersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 'auto',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: '#F8F8F8',
-    borderRadius: 20,
-  },
-  passengersText: {
-    marginLeft: 5,
-    fontSize: 16,
-    color: '#1B1B3A',
-    fontWeight: '500',
-  },
-  locationContainer: {
-    marginBottom: 20,
-  },
-  locationInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F8F8',
-    padding: 15,
-    borderRadius: 12,
-    marginBottom: 10,
-    position: 'relative',
-  },
-  locationText: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 16,
-    color: '#1B1B3A',
-  },
-  placeholderText: {
-    color: '#666',
-  },
-  swapButton: {
-    position: 'absolute',
-    right: 15,
-    top: '50%',
-    marginTop: -10,
-    padding: 5,
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-    gap: 10,
-  },
-  dateInput: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F8F8',
-    padding: 15,
-    borderRadius: 12,
-    flex: 1,
-  },
-  dateText: {
-    marginLeft: 10,
-    fontSize: 16,
-    color: '#1B1B3A',
-  },
-  addReturnButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-  },
-  addReturnText: {
-    marginLeft: 5,
-    fontSize: 16,
-    color: '#666',
-  },
-  searchButton: {
-    backgroundColor: '#1B1B3A',
-    borderRadius: 25,
-    paddingVertical: 15,
-    alignItems: 'center',
-  },
-  searchButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  cheapTicketsSection: {
-    marginBottom: 30,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-    marginBottom: 5,
-  },
-  sectionSubtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 20,
-  },
-  priceCards: {
-    flexDirection: 'row',
-    gap: 15,
-  },
-  priceCard: {
-    flex: 1,
-    backgroundColor: 'white',
-    borderRadius: 12,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
-  },
-  price: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-    marginBottom: 15,
-  },
-  findTicketButton: {
-    backgroundColor: '#E8F5F3',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  findTicketText: {
-    color: '#00A085',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  tipContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 10,
-  },
-  tipText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 12,
-    color: '#666',
-    lineHeight: 16,
-  },
-  busTimesSection: {
-    marginBottom: 30,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#F5F5F7',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-  },
-  locationList: {
-    flex: 1,
-  },
-  locationItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 20,
-    backgroundColor: 'white',
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  locationItemLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  locationCode: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  locationCodeText: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-  },
-  locationCity: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#1B1B3A',
-  },
-  locationCountry: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 2,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  passengerModal: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 30,
-    alignItems: 'center',
-    minWidth: 280,
-  },
-  passengerModalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-    marginBottom: 25,
-  },
-  passengerControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-  passengerButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#F0F0F0',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  passengerButtonDisabled: {
-    backgroundColor: '#F8F8F8',
-  },
-  passengerCount: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1B1B3A',
-    marginHorizontal: 30,
-  },
-  passengerDoneButton: {
-    backgroundColor: '#1B1B3A',
-    borderRadius: 25,
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-  },
-  passengerDoneText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
 
 export default Home;
