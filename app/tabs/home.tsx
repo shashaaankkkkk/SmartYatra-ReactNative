@@ -1,14 +1,14 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  View,
+  Animated,
+  Dimensions,
+  PanResponder,
+  Platform,
+  ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
-  Animated,
-  Dimensions,
-  Platform,
-  Modal,
+  View,
 } from "react-native";
 
 interface BusStop {
@@ -44,7 +44,10 @@ const Home: React.FC = () => {
   const [selectedRoute, setSelectedRoute] = useState<BusRoute | null>(null);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const slideAnim = useRef(new Animated.Value(screenHeight * 0.45)).current; // Start off-screen
+
+  // For PanResponder
+  const pan = useRef(new Animated.ValueXY()).current;
 
   // Dummy data for Punjab bus stops
   const nearbyStops: BusStop[] = [
@@ -138,19 +141,54 @@ const Home: React.FC = () => {
   ];
 
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // Initial slide-up animation
+    Animated.timing(slideAnim, {
+      toValue: 0,
+      duration: 500,
+      useNativeDriver: false, // 'false' because we are animating layout properties (top)
+    }).start();
   }, []);
+
+  const collapsedHeight = screenHeight * 0.2; // Make it smaller to show more map
+  const expandedHeight = screenHeight * 0.85;
+  const sheetHeight = useRef(new Animated.Value(collapsedHeight)).current;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        sheetHeight.setOffset(sheetHeight._value);
+      },
+      onPanResponderMove: (e, gestureState) => {
+        // Dragging down increases height, dragging up decreases it.
+        // We use negative dy because pulling down is a positive dy.
+        const newHeight = sheetHeight._offset - gestureState.dy;
+        // Clamp the height between collapsed and expanded states
+        if (newHeight >= collapsedHeight && newHeight <= expandedHeight) {
+          sheetHeight.setValue(newHeight);
+        }
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        sheetHeight.flattenOffset();
+        const isMovingUp = gestureState.vy < 0;
+        const isMovingDown = gestureState.vy > 0;
+
+        if (isMovingUp) {
+          // Snap to expanded
+          Animated.spring(sheetHeight, {
+            toValue: expandedHeight,
+            useNativeDriver: false,
+          }).start();
+        } else if (isMovingDown) {
+          // Snap to collapsed
+          Animated.spring(sheetHeight, {
+            toValue: collapsedHeight,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    }),
+  ).current;
 
   const getResponsiveWidth = () => {
     if (isWeb) {
@@ -586,24 +624,19 @@ const Home: React.FC = () => {
       fontSize: 18,
     },
     bottomSheet: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
       backgroundColor: "white",
-      borderTopLeftRadius: 25,
-      borderTopRightRadius: 25,
-      flex: 1,
-      paddingTop: 10,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
       shadowColor: "#000",
       shadowOffset: { width: 0, height: -4 },
       shadowOpacity: 0.1,
       shadowRadius: 12,
       elevation: 8,
-    },
-    bottomSheetHandle: {
-      width: 40,
-      height: 4,
-      backgroundColor: "#D1D5DB",
-      borderRadius: 2,
-      alignSelf: "center" as const,
-      marginBottom: 20,
+      paddingTop: 10,
     },
     categoryTabs: {
       flexDirection: "row" as const,
@@ -612,6 +645,20 @@ const Home: React.FC = () => {
       borderRadius: 12,
       padding: 4,
       marginBottom: 20,
+    },
+    bottomSheetHandleContainer: {
+      paddingVertical: 10, // Makes the handle easier to grab
+      alignItems: "center",
+    },
+    bottomSheetHandle: {
+      width: 40,
+      height: 5,
+      backgroundColor: "#D1D5DB",
+      borderRadius: 2.5,
+      alignSelf: "center" as const,
+    },
+    bottomSheetContent: {
+      flex: 1, // Ensures the content area fills the sheet
     },
     categoryTab: {
       flex: 1,
@@ -643,6 +690,7 @@ const Home: React.FC = () => {
       marginBottom: 16,
     },
     contentContainer: {
+      flex: 1,
       paddingHorizontal: 20,
     },
     stopCard: {
@@ -861,71 +909,77 @@ const Home: React.FC = () => {
       <Animated.View
         style={[
           styles.bottomSheet,
-          {
-            opacity: fadeAnim,
-            transform: [{ translateY: slideAnim }],
-          },
+          { height: sheetHeight }, // Use animated height
         ]}
       >
-        <View style={styles.bottomSheetHandle} />
-
-        {/* Category Tabs */}
-        <View style={styles.categoryTabs}>
-          <TouchableOpacity
-            style={[
-              styles.categoryTab,
-              selectedCategory === "stops" && styles.activeCategoryTab,
-            ]}
-            onPress={() => setSelectedCategory("stops")}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.categoryTabText,
-                selectedCategory === "stops" && styles.activeCategoryTabText,
-              ]}
-            >
-              Nearby Stops
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.categoryTab,
-              selectedCategory === "routes" && styles.activeCategoryTab,
-            ]}
-            onPress={() => setSelectedCategory("routes")}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.categoryTabText,
-                selectedCategory === "routes" && styles.activeCategoryTabText,
-              ]}
-            >
-              Available Routes
-            </Text>
-          </TouchableOpacity>
+        <View
+          style={styles.bottomSheetHandleContainer}
+          {...panResponder.panHandlers}
+        >
+          <View style={styles.bottomSheetHandle} />
         </View>
 
-        <Text style={styles.sectionTitle}>
-          {selectedCategory === "stops" ? "Nearby Stops" : "Available Routes"}
-        </Text>
+        <View style={styles.bottomSheetContent}>
+          {/* Category Tabs */}
+          <View style={styles.categoryTabs}>
+            <TouchableOpacity
+              style={[
+                styles.categoryTab,
+                selectedCategory === "stops" && styles.activeCategoryTab,
+              ]}
+              onPress={() => setSelectedCategory("stops")}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.categoryTabText,
+                  selectedCategory === "stops" && styles.activeCategoryTabText,
+                ]}
+              >
+                Nearby Stops
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.categoryTab,
+                selectedCategory === "routes" && styles.activeCategoryTab,
+              ]}
+              onPress={() => setSelectedCategory("routes")}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.categoryTabText,
+                  selectedCategory === "routes" && styles.activeCategoryTabText,
+                ]}
+              >
+                Available Routes
+              </Text>
+            </TouchableOpacity>
+          </View>
 
-        {/* Content */}
-        <ScrollView
-          style={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
-        >
-          {selectedCategory === "stops" &&
-            nearbyStops.map((stop, index) => (
-              <BusStopCard key={stop.id} stop={stop} index={index} />
-            ))}
+          <Text style={styles.sectionTitle}>
+            {selectedCategory === "stops"
+              ? "Nearby Stops"
+              : "Available Routes"}
+          </Text>
 
-          {selectedCategory === "routes" &&
-            busRoutes.map((route, index) => (
-              <RouteCard key={route.id} route={route} index={index} />
-            ))}
-        </ScrollView>
+          {/* Content */}
+          <ScrollView
+            style={styles.contentContainer}
+            showsVerticalScrollIndicator={false}
+          >
+            {selectedCategory === "stops" &&
+              nearbyStops.map((stop, index) => (
+                <BusStopCard key={stop.id} stop={stop} index={index} />
+              ))}
+
+            {selectedCategory === "routes" &&
+              busRoutes.map((route, index) => (
+                <RouteCard key={route.id} route={route} index={index} />
+              ))}
+          </ScrollView>
+        </View>
       </Animated.View>
     </View>
   );
